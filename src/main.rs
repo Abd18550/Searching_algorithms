@@ -8,9 +8,9 @@ use sdl2::render::Canvas;
 use sdl2::video::Window;
 use std::time::Duration;
 
-const WINDOW_SIZE: u32 = 1000;
+const GRID_SIZE: usize = 49;
 const CELL_SIZE: u32 = 20;
-const GRID_SIZE: usize = (WINDOW_SIZE / CELL_SIZE) as usize;
+const WINDOW_SIZE: u32 = (GRID_SIZE as u32) * CELL_SIZE;
 
 fn create_maze() -> Vec<Vec<u8>> {
     let mut maze = vec![vec![1; GRID_SIZE]; GRID_SIZE]; // 1 = wall, 0 = path
@@ -24,7 +24,7 @@ fn create_maze() -> Vec<Vec<u8>> {
             let nx = x as isize + dx;
             let ny = y as isize + dy;
 
-            if nx > 0 && ny > 0 && nx < 49 && ny < 49 {
+            if nx > 0 && ny > 0 && nx < (GRID_SIZE - 1) as isize && ny < (GRID_SIZE - 1) as isize {
                 let nx = nx as usize;
                 let ny = ny as usize;
 
@@ -37,15 +37,15 @@ fn create_maze() -> Vec<Vec<u8>> {
         }
     }
 
-    // Carve maze inside interior space
+    // Start carving from inside
     maze[1][1] = 0;
     carve(1, 1, &mut maze);
 
-    // Ensure start and end points are paths
-    maze[1][1] = 0;       // Start
-    maze[47][47] = 0;     // Finish
+    // Ensure start and end points are path
+    maze[1][1] = 0;
+    maze[47][47] = 0;
 
-    // Solid wall border on all edges
+    // Add solid border
     for i in 0..GRID_SIZE {
         maze[0][i] = 1;
         maze[GRID_SIZE - 1][i] = 1;
@@ -96,20 +96,24 @@ fn main() -> Result<(), String> {
         .build()
         .map_err(|e| e.to_string())?;
 
-    let mut canvas = window.into_canvas().present_vsync().build().map_err(|e| e.to_string())?;
-    let mut event_pump = sdl_context.event_pump()?;
+    let mut canvas = window
+        .into_canvas()
+        .present_vsync()
+        .build()
+        .map_err(|e| e.to_string())?;
 
+    let mut event_pump = sdl_context.event_pump()?;
     let maze = create_maze();
 
     'running: loop {
         for event in event_pump.poll_iter() {
-            match event {
-                Event::Quit { .. }
-                | Event::KeyDown {
-                    keycode: Some(Keycode::Escape),
-                    ..
-                } => break 'running,
-                _ => {}
+            if let Event::Quit { .. }
+            | Event::KeyDown {
+                keycode: Some(Keycode::Escape),
+                ..
+            } = event
+            {
+                break 'running;
             }
         }
 
