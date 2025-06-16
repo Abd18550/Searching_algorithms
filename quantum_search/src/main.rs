@@ -1,4 +1,5 @@
 // Quantum Maze Solver - Rust + SDL2
+
 use rand::{thread_rng, seq::SliceRandom};
 use sdl2::pixels::Color;
 use sdl2::event::Event;
@@ -14,6 +15,7 @@ const WINDOW_SIZE: u32 = (GRID_SIZE as u32) * CELL_SIZE;
 const START: (usize, usize) = (1, 1);
 const END: (usize, usize) = (47, 47);
 
+// Directions the agent can move
 #[derive(Clone, Copy, PartialEq)]
 enum Direction {
     Up,
@@ -22,6 +24,7 @@ enum Direction {
     Left,
 }
 
+// Each agent holds its current position, full path so far, and a unique id
 #[derive(Clone)]
 struct Agent {
     position: (usize, usize),
@@ -35,6 +38,7 @@ impl Agent {
     }
 }
 
+// Generates a perfect maze using recursive backtracking
 fn create_maze() -> Vec<Vec<u8>> {
     let mut maze = vec![vec![1; GRID_SIZE]; GRID_SIZE]; // 1 = wall, 0 = path
 
@@ -46,9 +50,6 @@ fn create_maze() -> Vec<Vec<u8>> {
         for (dx, dy) in dirs {
             let nx = x as isize + dx;
             let ny = y as isize + dy;
-            // if nx == 47 && ny == 47 {
-            //     return;
-            // }
 
             if nx > 0 && ny > 0 && nx < (GRID_SIZE - 1) as isize && ny < (GRID_SIZE - 1) as isize {
                 let nx = nx as usize;
@@ -63,15 +64,11 @@ fn create_maze() -> Vec<Vec<u8>> {
         }
     }
 
-    // Start carving from inside
     maze[1][1] = 0;
     carve(1, 1, &mut maze);
-
-    // Ensure start and end points are path
     maze[1][1] = 0;
     maze[47][47] = 0;
-    
-    // Add solid border
+
     for i in 0..GRID_SIZE {
         maze[0][i] = 1;
         maze[GRID_SIZE - 1][i] = 1;
@@ -82,6 +79,7 @@ fn create_maze() -> Vec<Vec<u8>> {
     maze
 }
 
+// Draws the entire maze and all current agents
 fn draw_maze(canvas: &mut Canvas<Window>, maze: &Vec<Vec<u8>>, agents: &Vec<Agent>) -> Result<(), String> {
     for y in 0..GRID_SIZE {
         for x in 0..GRID_SIZE {
@@ -89,38 +87,30 @@ fn draw_maze(canvas: &mut Canvas<Window>, maze: &Vec<Vec<u8>>, agents: &Vec<Agen
                 Color::RED
             } else {
                 match maze[y][x] {
-                    1 => Color::RGB(150, 150, 150),
-                    2 => Color::RGB(0, 100, 255),
-                    3 => Color::RGB(255, 100, 100),
-                    _ => Color::BLACK,
+                    1 => Color::RGB(150, 150, 150), // wall
+                    2 => Color::RGB(0, 100, 255),   // visited
+                    3 => Color::RGB(255, 100, 100), // dead end
+                    _ => Color::BLACK,              // path
                 }
             };
 
             canvas.set_draw_color(color);
-            let rect = Rect::new(
-                (x as u32 * CELL_SIZE) as i32,
-                (y as u32 * CELL_SIZE) as i32,
-                CELL_SIZE,
-                CELL_SIZE,
-            );
+            let rect = Rect::new((x as u32 * CELL_SIZE) as i32, (y as u32 * CELL_SIZE) as i32, CELL_SIZE, CELL_SIZE);
             canvas.fill_rect(rect)?;
         }
     }
 
+    // Draw all agents as green squares
     for agent in agents {
         canvas.set_draw_color(Color::GREEN);
-        let rect = Rect::new(
-            (agent.position.0 as u32 * CELL_SIZE) as i32,
-            (agent.position.1 as u32 * CELL_SIZE) as i32,
-            CELL_SIZE,
-            CELL_SIZE,
-        );
+        let rect = Rect::new((agent.position.0 as u32 * CELL_SIZE) as i32, (agent.position.1 as u32 * CELL_SIZE) as i32, CELL_SIZE, CELL_SIZE);
         canvas.fill_rect(rect)?;
     }
 
     Ok(())
 }
 
+// Check all possible moves for an agent that don’t revisit its own path
 fn check_available_moves(maze: &Vec<Vec<u8>>, agent: &Agent) -> Vec<Direction> {
     let (px, py) = agent.position;
     let mut dirs = Vec::new();
@@ -141,6 +131,7 @@ fn check_available_moves(maze: &Vec<Vec<u8>>, agent: &Agent) -> Vec<Direction> {
     dirs
 }
 
+// Move the agent in the given direction and update its path
 fn move_agent(agent: &mut Agent, dir: Direction) {
     match dir {
         Direction::Up => agent.position.1 -= 1,
@@ -151,6 +142,7 @@ fn move_agent(agent: &mut Agent, dir: Direction) {
     agent.path.push(agent.position);
 }
 
+// Once a winner is found, draw only its path
 fn draw_solution_path(canvas: &mut Canvas<Window>, maze: &Vec<Vec<u8>>, path: &Vec<(usize, usize)>) -> Result<(), String> {
     for y in 0..GRID_SIZE {
         for x in 0..GRID_SIZE {
@@ -159,20 +151,15 @@ fn draw_solution_path(canvas: &mut Canvas<Window>, maze: &Vec<Vec<u8>>, path: &V
             } else if (x, y) == END {
                 Color::RED
             } else if path.contains(&(x, y)) {
-                Color::RGB(0, 200, 255)
+                Color::RGB(0, 200, 255) // Final path
             } else if maze[y][x] == 1 {
-                Color::RGB(150, 150, 150)
+                Color::RGB(150, 150, 150) // wall
             } else {
                 Color::BLACK
             };
 
             canvas.set_draw_color(color);
-            let rect = Rect::new(
-                (x as u32 * CELL_SIZE) as i32,
-                (y as u32 * CELL_SIZE) as i32,
-                CELL_SIZE,
-                CELL_SIZE,
-            );
+            let rect = Rect::new((x as u32 * CELL_SIZE) as i32, (y as u32 * CELL_SIZE) as i32, CELL_SIZE, CELL_SIZE);
             canvas.fill_rect(rect)?;
         }
     }
@@ -181,6 +168,7 @@ fn draw_solution_path(canvas: &mut Canvas<Window>, maze: &Vec<Vec<u8>>, path: &V
 }
 
 fn main() -> Result<(), String> {
+    // SDL2 setup
     let sdl_context = sdl2::init()?;
     let video_subsystem = sdl_context.video()?;
     let window = video_subsystem
@@ -191,10 +179,12 @@ fn main() -> Result<(), String> {
     let mut canvas = window.into_canvas().build().map_err(|e| e.to_string())?;
     let mut event_pump = sdl_context.event_pump()?;
 
+    // Create maze and agents
     let mut maze = create_maze();
     let mut agents = vec![Agent::new(START, vec![START], 0)];
     let mut winner_path = None;
 
+    // Main simulation loop
     'running: loop {
         for event in event_pump.poll_iter() {
             if let Event::KeyDown { keycode: Some(Keycode::Escape), .. } = event {
@@ -202,6 +192,7 @@ fn main() -> Result<(), String> {
             }
         }
 
+        // If winner is found, draw the winning path only
         if let Some(ref path) = winner_path {
             canvas.set_draw_color(Color::BLACK);
             canvas.clear();
@@ -212,6 +203,7 @@ fn main() -> Result<(), String> {
 
         let mut new_agents = vec![];
         let mut i = 0;
+
         while i < agents.len() {
             let mut agent = agents[i].clone();
             let dirs = check_available_moves(&maze, &agent);
@@ -223,20 +215,20 @@ fn main() -> Result<(), String> {
             }
 
             if dirs.is_empty() {
-                maze[agent.position.1][agent.position.0] = 3;
+                maze[agent.position.1][agent.position.0] = 3; // mark dead end
                 agents.remove(i);
                 continue;
             }
 
+            // If multiple directions, clone agent for each except one
             if dirs.len() > 1 {
                 for (j, dir) in dirs.iter().enumerate() {
-                    if j == dirs.len()-1 {
+                    if j == dirs.len() - 1 {
                         move_agent(&mut agent, *dir);
                         maze[agent.position.1][agent.position.0] = 2;
-                        agents[i] = agent.clone();
+                        agents[i] = agent.clone(); // replace current
                     } else {
                         let mut new = agent.clone();
-                        //new.path.pop();
                         move_agent(&mut new, *dir);
                         maze[new.position.1][new.position.0] = 2;
                         new.id = agents.len() + new_agents.len();
@@ -254,6 +246,7 @@ fn main() -> Result<(), String> {
 
         agents.extend(new_agents);
 
+        // Render
         canvas.set_draw_color(Color::BLACK);
         canvas.clear();
         draw_maze(&mut canvas, &maze, &agents)?;
@@ -263,4 +256,3 @@ fn main() -> Result<(), String> {
 
     Ok(())
 }
-

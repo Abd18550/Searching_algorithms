@@ -8,10 +8,12 @@ use sdl2::render::Canvas;
 use sdl2::video::Window;
 use std::time::Duration;
 
+// Grid and cell size definitions
 const GRID_SIZE: usize = 49;
 const CELL_SIZE: u32 = 20;
 const WINDOW_SIZE: u32 = (GRID_SIZE as u32) * CELL_SIZE;
 
+// Directions for movement (not currently used in logic)
 #[derive(Clone, Copy, PartialEq)]
 enum Direction {
     Up,
@@ -20,35 +22,40 @@ enum Direction {
     Left,
 }
 
+// Player struct with a position field
 struct Player {
     position: (usize, usize),
 }
+
 impl Player {
+    // Constructor for Player, starts at (1,1)
     fn new() -> Self {
         Player {
             position: (1, 1),
         }
     }
 }
-fn create_maze() -> Vec<Vec<u8>> {
-    let mut maze = vec![vec![1; GRID_SIZE]; GRID_SIZE]; // 1 = wall, 0 = path
 
+// Maze generation using recursive backtracking
+fn create_maze() -> Vec<Vec<u8>> {
+    let mut maze = vec![vec![1; GRID_SIZE]; GRID_SIZE]; // 1 = wall
+
+    // Recursive carving function
     fn carve(x: usize, y: usize, maze: &mut Vec<Vec<u8>>) {
         let mut dirs = vec![(0, -2), (2, 0), (0, 2), (-2, 0)];
         let mut rng = thread_rng();
-        dirs.shuffle(&mut rng);
+        dirs.shuffle(&mut rng); // Randomize directions
 
         for (dx, dy) in dirs {
             let nx = x as isize + dx;
             let ny = y as isize + dy;
-            // if nx == 47 && ny == 47 {
-            //     return;
-            // }
 
+            // Check bounds and avoid carving out of maze
             if nx > 0 && ny > 0 && nx < (GRID_SIZE - 1) as isize && ny < (GRID_SIZE - 1) as isize {
                 let nx = nx as usize;
                 let ny = ny as usize;
 
+                // If the target cell is a wall, carve a path to it
                 if maze[ny][nx] == 1 {
                     maze[ny][nx] = 0;
                     maze[(y as isize + dy / 2) as usize][(x as isize + dx / 2) as usize] = 0;
@@ -58,15 +65,15 @@ fn create_maze() -> Vec<Vec<u8>> {
         }
     }
 
-    // Start carving from inside
+    // Start carving from (1,1)
     maze[1][1] = 0;
     carve(1, 1, &mut maze);
 
-    // Ensure start and end points are path
+    // Set start and end points
     maze[1][1] = 0;
     maze[47][47] = 0;
-    
-    // Add solid border
+
+    // Create borders (outer frame as walls)
     for i in 0..GRID_SIZE {
         maze[0][i] = 1;
         maze[GRID_SIZE - 1][i] = 1;
@@ -77,6 +84,7 @@ fn create_maze() -> Vec<Vec<u8>> {
     maze
 }
 
+// Drawing the maze on the SDL2 canvas
 fn draw_maze(canvas: &mut Canvas<Window>, maze: &Vec<Vec<u8>>, player: &Player) -> Result<(), String> {
     let start = player.position;
     let end = (47, 47);
@@ -84,17 +92,17 @@ fn draw_maze(canvas: &mut Canvas<Window>, maze: &Vec<Vec<u8>>, player: &Player) 
     for y in 0..GRID_SIZE {
         for x in 0..GRID_SIZE {
             let color = if (x, y) == start {
-                Color::GREEN
+                Color::GREEN // Start cell
             } else if (x, y) == end {
-                Color::RED
+                Color::RED // End cell
             } else if maze[y][x] == 1 {
                 Color::RGB(150, 150, 150) // Wall
             } else if maze[y][x] == 2 {
-                Color::RGB(0, 100, 255) // طريق مجرّب
+                Color::RGB(0, 100, 255) // Path taken
             } else if maze[y][x] == 3 {
-                Color::RGB(255, 100, 100) // طريق تم التراجع عنه
-            }else {
-                Color::BLACK // Path
+                Color::RGB(255, 100, 100) // Backtracked path
+            } else {
+                Color::BLACK // Empty space
             };
 
             canvas.set_draw_color(color);
@@ -111,34 +119,7 @@ fn draw_maze(canvas: &mut Canvas<Window>, maze: &Vec<Vec<u8>>, player: &Player) 
     Ok(())
 }
 
-// fn check_avaliable_move(maze: &Vec<Vec<u8>>, player: &Player) -> Vec<Direction> {
-//     let px = player.position.0;
-//     let py = player.position.1;
-//     let mut directions = Vec::<Direction>::new();
-//     if maze[py-1][px] == 0 {
-//         directions.push(Direction::Up);
-//     }
-//     if maze[py+1][px] == 0 {
-//         directions.push(Direction::Down);
-//     }
-//     if maze[py][px+1] == 0 {
-//         directions.push(Direction::Right);
-//     }
-//     if maze[py][px-1] == 0 {
-//         directions.push(Direction::Left);
-//     }
-//     directions
-// }
-
-// fn move(player: &Player, dir: Direction) {
-//     match dir {
-//         Direction::Up => player.position.1 -= 1,
-//         Direction::Down => player.position.1 += 1,
-//         Direction::Right => player.position.0 += 1,
-//         Direction::Left => player.position.0 -= 1,
-//     }
-// }
-
+// Recursive backtracking maze solver with animation
 fn solve_maze_step_by_step(
     maze: &mut Vec<Vec<u8>>,
     x: usize,
@@ -146,11 +127,12 @@ fn solve_maze_step_by_step(
     canvas: &mut Canvas<Window>,
     player: &Player,
 ) -> bool {
+    // Bounds and wall check
     if x >= GRID_SIZE || y >= GRID_SIZE || maze[y][x] != 0 {
         return false;
     }
 
-    // الوصول للنهاية
+    // Reached the goal
     if (x, y) == (47, 47) {
         maze[y][x] = 2;
         draw_maze(canvas, maze, player).unwrap();
@@ -159,12 +141,13 @@ fn solve_maze_step_by_step(
         return true;
     }
 
-    // علّم الخلية كجزء من المسار
+    // Mark current cell as visited path
     maze[y][x] = 2;
     draw_maze(canvas, maze, player).unwrap();
     canvas.present();
     std::thread::sleep(Duration::from_millis(50));
 
+    // Explore 4 directions: up, right, down, left
     let dirs = [(0isize, -1), (1, 0), (0, 1), (-1, 0)];
     for (dx, dy) in dirs {
         let nx = x as isize + dx;
@@ -177,7 +160,7 @@ fn solve_maze_step_by_step(
         }
     }
 
-    // تراجع
+    // Backtrack and mark the cell as tried but failed
     maze[y][x] = 3;
     draw_maze(canvas, maze, player).unwrap();
     canvas.present();
@@ -185,8 +168,9 @@ fn solve_maze_step_by_step(
     false
 }
 
-
+// Entry point
 fn main() -> Result<(), String> {
+    // Initialize SDL2 context and create window and canvas
     let sdl_context = sdl2::init()?;
     let video_subsystem = sdl_context.video()?;
 
@@ -205,47 +189,49 @@ fn main() -> Result<(), String> {
     let mut event_pump = sdl_context.event_pump()?;
     let mut maze = create_maze();
     let mut solving = true;
-    let mut path: Vec<(usize, usize)> = Vec::new();
 
+    // Print maze to console for debugging
     for line in &maze {
         println!("{:?}", line)
     }
+
     let mut player = Player::new();
+
+    // Main event/render loop
     'running: loop {
         for event in event_pump.poll_iter() {
             match event {
                 Event::KeyDown { keycode: Some(k), repeat: false, .. } => {
-                        match k {
-                            Keycode::Escape => {
-                                break 'running;
+                    match k {
+                        Keycode::Escape => break 'running, // Exit on ESC
+                        Keycode::Return => {
+                            if solving {
+                                solve_maze_step_by_step(&mut maze, 1, 1, &mut canvas, &player);
+                                solving = false;
                             }
-                            Keycode::Return => {
-                                if solving {
-                                    solve_maze_step_by_step(&mut maze, 1, 1, &mut canvas, &player);
-                                    solving = false;
-                                }
-                            }
-                           
-                            _ => {}
                         }
+                        _ => {}
+                    }
                 }
-
-        
                 _ => {}
             }
-            
         }
+
+        // If player reaches the end
         if player.position == (47, 47) {
             println!("you win");
             break 'running;
         }
 
+        // Clear screen
         canvas.set_draw_color(Color::BLACK);
         canvas.clear();
 
+        // Draw current maze state
         draw_maze(&mut canvas, &maze, &player)?;
         canvas.present();
 
+        // Wait a short time to control FPS
         std::thread::sleep(Duration::from_millis(16));
     }
 
