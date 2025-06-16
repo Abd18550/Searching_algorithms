@@ -12,6 +12,24 @@ const GRID_SIZE: usize = 49;
 const CELL_SIZE: u32 = 20;
 const WINDOW_SIZE: u32 = (GRID_SIZE as u32) * CELL_SIZE;
 
+#[derive(Clone, Copy, PartialEq)]
+enum Direction {
+    Up,
+    Down,
+    Right,
+    Left,
+}
+
+struct Player {
+    position: (usize, usize),
+}
+impl Player {
+    fn new() -> Self {
+        Player {
+            position: (1, 1),
+        }
+    }
+}
 fn create_maze() -> Vec<Vec<u8>> {
     let mut maze = vec![vec![1; GRID_SIZE]; GRID_SIZE]; // 1 = wall, 0 = path
 
@@ -56,8 +74,8 @@ fn create_maze() -> Vec<Vec<u8>> {
     maze
 }
 
-fn draw_maze(canvas: &mut Canvas<Window>, maze: &Vec<Vec<u8>>) -> Result<(), String> {
-    let start = (1, 1);
+fn draw_maze(canvas: &mut Canvas<Window>, maze: &Vec<Vec<u8>>, player: &Player) -> Result<(), String> {
+    let start = player.position;
     let end = (47, 47);
 
     for y in 0..GRID_SIZE {
@@ -68,7 +86,11 @@ fn draw_maze(canvas: &mut Canvas<Window>, maze: &Vec<Vec<u8>>) -> Result<(), Str
                 Color::RED
             } else if maze[y][x] == 1 {
                 Color::RGB(150, 150, 150) // Wall
-            } else {
+            } else if maze[y][x] == 2 {
+                Color::RGB(0, 100, 255) // طريق مجرّب
+            } else if maze[y][x] == 3 {
+                Color::RGB(255, 100, 100) // طريق تم التراجع عنه
+            }else {
                 Color::BLACK // Path
             };
 
@@ -85,6 +107,81 @@ fn draw_maze(canvas: &mut Canvas<Window>, maze: &Vec<Vec<u8>>) -> Result<(), Str
 
     Ok(())
 }
+
+// fn check_avaliable_move(maze: &Vec<Vec<u8>>, player: &Player) -> Vec<Direction> {
+//     let px = player.position.0;
+//     let py = player.position.1;
+//     let mut directions = Vec::<Direction>::new();
+//     if maze[py-1][px] == 0 {
+//         directions.push(Direction::Up);
+//     }
+//     if maze[py+1][px] == 0 {
+//         directions.push(Direction::Down);
+//     }
+//     if maze[py][px+1] == 0 {
+//         directions.push(Direction::Right);
+//     }
+//     if maze[py][px-1] == 0 {
+//         directions.push(Direction::Left);
+//     }
+//     directions
+// }
+
+// fn move(player: &Player, dir: Direction) {
+//     match dir {
+//         Direction::Up => player.position.1 -= 1,
+//         Direction::Down => player.position.1 += 1,
+//         Direction::Right => player.position.0 += 1,
+//         Direction::Left => player.position.0 -= 1,
+//     }
+// }
+
+fn solve_maze_step_by_step(
+    maze: &mut Vec<Vec<u8>>,
+    x: usize,
+    y: usize,
+    canvas: &mut Canvas<Window>,
+    player: &Player,
+) -> bool {
+    if x >= GRID_SIZE || y >= GRID_SIZE || maze[y][x] != 0 {
+        return false;
+    }
+
+    // الوصول للنهاية
+    if (x, y) == (47, 47) {
+        maze[y][x] = 2;
+        draw_maze(canvas, maze, player).unwrap();
+        canvas.present();
+        std::thread::sleep(Duration::from_millis(10));
+        return true;
+    }
+
+    // علّم الخلية كجزء من المسار
+    maze[y][x] = 2;
+    draw_maze(canvas, maze, player).unwrap();
+    canvas.present();
+    std::thread::sleep(Duration::from_millis(50));
+
+    let dirs = [(0isize, -1), (1, 0), (0, 1), (-1, 0)];
+    for (dx, dy) in dirs {
+        let nx = x as isize + dx;
+        let ny = y as isize + dy;
+
+        if nx >= 0 && ny >= 0 {
+            if solve_maze_step_by_step(maze, nx as usize, ny as usize, canvas, player) {
+                return true;
+            }
+        }
+    }
+
+    // تراجع
+    maze[y][x] = 3;
+    draw_maze(canvas, maze, player).unwrap();
+    canvas.present();
+    std::thread::sleep(Duration::from_millis(50));
+    false
+}
+
 
 fn main() -> Result<(), String> {
     let sdl_context = sdl2::init()?;
@@ -103,24 +200,47 @@ fn main() -> Result<(), String> {
         .map_err(|e| e.to_string())?;
 
     let mut event_pump = sdl_context.event_pump()?;
-    let maze = create_maze();
+    let mut maze = create_maze();
+    let mut solving = true;
+    let mut path: Vec<(usize, usize)> = Vec::new();
 
+    for line in &maze {
+        println!("{:?}", line)
+    }
+    let mut player = Player::new();
     'running: loop {
         for event in event_pump.poll_iter() {
-            if let Event::Quit { .. }
-            | Event::KeyDown {
-                keycode: Some(Keycode::Escape),
-                ..
-            } = event
-            {
-                break 'running;
+            match event {
+                Event::KeyDown { keycode: Some(k), repeat: false, .. } => {
+                        match k {
+                            Keycode::Escape => {
+                                break 'running;
+                            }
+                            Keycode::Return => {
+                                if solving {
+                                    solve_maze_step_by_step(&mut maze, 1, 1, &mut canvas, &player);
+                                    solving = false;
+                                }
+                            }
+                           
+                            _ => {}
+                        }
+                }
+
+        
+                _ => {}
             }
+            
+        }
+        if player.position == (47, 47) {
+            println!("you win");
+            break 'running;
         }
 
         canvas.set_draw_color(Color::BLACK);
         canvas.clear();
 
-        draw_maze(&mut canvas, &maze)?;
+        draw_maze(&mut canvas, &maze, &player)?;
         canvas.present();
 
         std::thread::sleep(Duration::from_millis(16));
