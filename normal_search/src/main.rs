@@ -41,6 +41,9 @@ fn create_maze() -> Vec<Vec<u8>> {
         for (dx, dy) in dirs {
             let nx = x as isize + dx;
             let ny = y as isize + dy;
+            // if nx == 47 && ny == 47 {
+            //     return;
+            // }
 
             if nx > 0 && ny > 0 && nx < (GRID_SIZE - 1) as isize && ny < (GRID_SIZE - 1) as isize {
                 let nx = nx as usize;
@@ -62,7 +65,7 @@ fn create_maze() -> Vec<Vec<u8>> {
     // Ensure start and end points are path
     maze[1][1] = 0;
     maze[47][47] = 0;
-
+    
     // Add solid border
     for i in 0..GRID_SIZE {
         maze[0][i] = 1;
